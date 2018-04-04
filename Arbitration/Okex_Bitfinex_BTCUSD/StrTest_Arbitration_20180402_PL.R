@@ -34,12 +34,19 @@ head(BITF_OK,10)
 str(BITF_OK)
 
 m <- data.matrix(BITF_OK)
+head(m)
+rm(BITF,OKFT,BITF_OK,ts)
+gc()
+cat("\014")
 
-hb <- 2.0
-hn <- 0.8
-lb <- -6.2
-ln <- -3.2
 sl <- 1.0001
+cond_open_sell_okft_buy_bitf <- 3.0
+cond_open_buy_okft_sell_bitf <- -3.0
+cond_close <- 0.9
+stop_loss <- -30.0
+step_entry <- 0.2
+step_continue <- 0.35
+scaling <- 1.4
 
 trade <- 0
 trade_positive_difference <- 0
@@ -48,6 +55,9 @@ start <- 0
 end <- 0
 price_b <- 0
 price_o <- 0
+avg_price_bitf <- 0
+avg_price_okft <- 0
+balance_used <- 0
 diff <- 0
 start_acc_b_usd <- 4000
 start_acc_o_usd <- 4000
@@ -64,333 +74,312 @@ acc_b_btc <- c()
 acc_o_btc <- c()
 s_acc_b_usd <- 0
 s_acc_o_usd <- 0
-deal_b <- 0
-deal_o <- 0
+deal <- 0
 comm_b <- c()
 comm_o <- c()
 profit_sum <- c()
 profit_perc <- c()
 duration <- c()
+SELL_OKFT_BUY_BITF <- 0
+BUY_OKFT_SELL_BITF <- 0
 
 for(i in 20:nrow(m)){
   if(trade == 0){
-    if(TRUE){
-      if(m[i,4] > hb){
+    if(m[i,4] > cond_open_sell_okft_buy_bitf){
+      trade <- 1
+      trade_positive_difference <- 1
+      #OPEN 1
+      #SELL OKFT & BUY BITF
+      min_acc <- min(acc_b_usd, acc_o_usd)
+      deal <- ((min_acc * step_entry) %/% 100) * 100
+      
+      price_b = m[i,2]
+      comm_b <- c(comm_b, deal * 0.002)
+      s_acc_b_usd <- acc_b_usd
+      temp <- acc_b_usd
+      acc_b_usd <- temp - deal - deal * 0.002
+      acc_b_btc <- c(acc_b_btc, deal / (m[i,2]*sl))
+      avg_price_bitf <- price_b
+      
+      
+      price_o = m[i,3]
+      comm_o <- c(comm_o, deal * 0.0015)
+      s_acc_o_usd <- acc_o_usd
+      temp <- acc_o_usd
+      acc_o_usd <- temp + deal - deal * 0.0015
+      acc_o_btc <- c(acc_o_btc, -deal / (m[i,3]/sl))
+      temp <- 0
+      avg_price_okft <- price_o
+      balance_used <- deal
+      
+      SELL_OKFT_BUY_BITF <- 1
+      start <- m[i,1]
+      diff <- m[i,4]
+      cat("Start. SELL OKFT & BUY BITF | DEAL=", format(round(deal,2), nsmall = 2), "\n")
+      cat("Balance OKFT:", format(round(s_acc_o_usd,2), nsmall = 2),
+          "Balance BITF:", format(round(s_acc_b_usd,2), nsmall = 2),"\n")
+      cat("OKFT price:", format(round(m[i,3],2), nsmall = 2),
+          "BITF price:", format(round(m[i,2],2), nsmall = 2),
+          "DIFF:", format(round(m[i,4],2), nsmall = 2), "%\n")
+      cat("Amount OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+          "Amount BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+          "Amount OKFT BTC:", format(round(sum(acc_o_btc),4), nsmall = 4),
+          "Amount BITF BTC:", format(round(sum(acc_b_btc),4), nsmall = 4),"\n")
+      next
+    }
+    else {
+      if(m[i,4] < cond_open_buy_okft_sell_bitf){
         trade <- 1
-        trade_positive_difference <- 1
-        #Prodaem futures i pokupaem bitfinex
+        trade_negative_difference <- 1
+        #OPEN 2
+        #BUY OKFT & SELL BITF
         min_acc <- min(acc_b_usd, acc_o_usd)
+        deal <- ((min_acc * step_entry) %/% 100) * 100
         
         price_b = m[i,2]
-        deal_b <- min_acc * acc_step_entry
-        comm_b <- c(comm_b, deal_b * 0.002)
+        comm_b <- c(comm_b, deal * 0.002)
         s_acc_b_usd <- acc_b_usd
         temp <- acc_b_usd
-        acc_b_usd <- temp - deal_b - deal_b * 0.002
-        acc_b_btc <- c(acc_b_btc, deal_b / (m[i,2]*sl))
+        acc_b_usd <- temp + deal - deal * 0.002
+        acc_b_btc <- c(acc_b_btc, -deal / (m[i,2]/sl))
+        avg_price_bitf <- price_b
         
         price_o = m[i,3]
-        deal_o <- min_acc * acc_step_entry
-        comm_o <- c(comm_o, deal_o * 0.0015)
+        comm_o <- c(comm_o, deal * 0.0015)
         s_acc_o_usd <- acc_o_usd
         temp <- acc_o_usd
-        acc_o_usd <- temp + deal_o - deal_o * 0.0015
-        acc_o_btc <- c(acc_o_btc, -deal_o / (m[i,3]/sl))
+        acc_o_usd <- temp - deal - deal * 0.0015
+        acc_o_btc <- c(acc_o_btc, deal / (m[i,3]*sl))
         temp <- 0
+        avg_price_okft <- price_o
+        balance_used <- deal
         
-        
-        
+        BUY_OKFT_SELL_BITF <- 1
         start <- m[i,1]
         diff <- m[i,4]
-        cat("Start deal: ",
-            as.character(as.POSIXct(m[i,1], origin = "1970-01-01")), "\n")
-        cat("Account Bitfinex USD:", format(round(s_acc_b_usd,2), nsmall = 2),
-            "Account Okex USD:", format(round(s_acc_o_usd,2), nsmall = 2),
-            "hedge1:",format(round(hedge1,2), nsmall = 2),
-            "hedge2:",format(round(hedge2,2), nsmall = 2),"\n")
-        cat("Bitfinex price:", format(round(m[i,2],2), nsmall = 2),
-            "Okex price:", format(round(m[i,3],2), nsmall = 2),
-            "Difference:", format(round(m[i,4],2), nsmall = 2), "%\n")
-        cat("BUY BITFINEX && SELL OKEX\n")
-        cat("Deal Bitfinex:", format(round(deal_b,2), nsmall = 2),
-            "Deal Okex:", format(round(deal_o,2), nsmall = 2), "\n")
-        cat("Account Bitfinex USD:", format(round(acc_b_usd,2), nsmall = 2),
-            "Account Okex USD:", format(round(acc_o_usd,2), nsmall = 2),
-            "Account Bitfinex BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),
-            "Account Okex BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),"\n")
-        
-        hedge2 <- deal_o / 100
-        order_btc_o <- hedge2 * 100 / m[i,3]
-        cat("hedge1:",format(round(hedge1,2), nsmall = 2),
-            "hedge2:",format(round(hedge2,2), nsmall = 2),"\n")
-        }
-      else {
-        if(m[i,4] < lb){
-          trade <- 1
-          trade_negative_difference <- 1
-          #Prodaem bitfinex i pokupaem futures
-          min_acc <- min(acc_b_usd, acc_o_usd)
-          
-          price_b = m[i,2]
-          deal_b <- min_acc * acc_step_entry
-          comm_b <- c(comm_b, deal_b * 0.002)
-          s_acc_b_usd <- acc_b_usd
-          temp <- acc_b_usd
-          acc_b_usd <- temp + deal_b - deal_b * 0.002
-          acc_b_btc <- c(acc_b_btc, -deal_b / (m[i,2]/sl))
-          
-          price_o = m[i,3]
-          deal_o <- min_acc * acc_step_entry
-          comm_o <- c(comm_o, deal_o * 0.0015)
-          s_acc_o_usd <- acc_o_usd
-          temp <- acc_o_usd
-          acc_o_usd <- temp - deal_o - deal_o * 0.0015
-          acc_o_btc <- c(acc_o_btc, deal_o / (m[i,3]*sl))
-          temp <- 0
-          
-          
-          
-          start <- m[i,1]
-          diff <- m[i,4]
-          cat("Start deal: ",
-              as.character(as.POSIXct(m[i,1], origin = "1970-01-01")), "\n")
-          cat("Account Bitfinex USD: ", format(round(s_acc_b_usd,2), nsmall = 2),
-              "Account Okex USD: ", format(round(s_acc_o_usd,2), nsmall = 2),
-              "hedge1:",format(round(hedge1,2), nsmall = 2),
-              "hedge2:",format(round(hedge2,2), nsmall = 2),"\n")
-          cat("Bitfinex price: ", format(round(m[i,2],2), nsmall = 2),
-              "Okex price: ", format(round(m[i,3],2), nsmall = 2),
-              "Difference: ", format(round(m[i,4],2), nsmall = 2), "%\n")
-          cat("SELL BITFINEX && BUY OKEX\n")
-          cat("Deal Bitfinex: ", format(round(deal_b,2), nsmall = 2),
-              "Deal Okex: ", format(round(deal_o,2), nsmall = 2), "\n")
-          cat("Account Bitfinex USD: ", format(round(acc_b_usd,2), nsmall = 2),
-              "Account Okex USD: ", format(round(acc_o_usd,2), nsmall = 2),
-              "Account Bitfinex BTC: ", format(round(sum(acc_b_btc),2), nsmall = 2),
-              "Account Okex BTC: ", format(round(sum(acc_o_btc),2), nsmall = 2),"\n")
-          
-          hedge2 <- deal_o / 100
-          order_btc_o <- hedge2 * 100 / m[i,3]
-          cat("hedge1:",format(round(hedge1,2), nsmall = 2),
-              "hedge2:",format(round(hedge2,2), nsmall = 2),"\n")
-        }
+        cat("Start. BUY OKFT & SELL BITF | DEAL=", format(round(deal,2), nsmall = 2), "\n")
+        cat("Balance OKFT:", format(round(s_acc_o_usd,2), nsmall = 2),
+            "Balance BITF:", format(round(s_acc_b_usd,2), nsmall = 2),"\n")
+        cat("OKFT price:", format(round(m[i,3],2), nsmall = 2),
+            "BITF price:", format(round(m[i,2],2), nsmall = 2),
+            "DIFF:", format(round(m[i,4],2), nsmall = 2), "%\n")
+        cat("Amount OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+            "Amount BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+            "Amount OKFT BTC:", format(round(sum(acc_o_btc),4), nsmall = 4),
+            "Amount BITF BTC:", format(round(sum(acc_b_btc),4), nsmall = 4),"\n")
+        next
       }
     }
-    else next
   }
   else{
-    
-    bal_btc_o <- hedge1 * 100 / m[i,3]
-    temp <- order_btc_o
-    order_btc_o <- hedge2 * 100 / m[i,3]
-    if(trade_positive_difference){
-      PL_o <- order_btc_o - temp
-    }
-    else{
-      PL_o <- temp - order_btc_o
-    }
-    
-
-    if(abs(price_o / m[i,3] - 1) > 0.05 && abs(PL_o * m[i,3]) > 100){ #abs(PL_o) / bal_btc_o > 0.03
-      cat("BTC balance=",format(round(bal_btc_o,4), nsmall = 4),
-          "BTC order=",format(round(order_btc_o,4), nsmall = 4),"\n")
-      temp <- bal_btc_o
-      bal_btc_o <- temp + PL_o
-      hedge1 <- (bal_btc_o * m[i,3]) / 100
-      cat("HEDGE!!!","Bal_BTC=",format(round(bal_btc_o,4), nsmall = 4),
-          "Price=",format(round(m[i,3],2), nsmall = 2),
-          "PL=", format(round(PL_o,4), nsmall = 4),
-          "hedge1=",format(round(hedge1,2), nsmall = 2),
-          "hedge2=",format(round(hedge2,2), nsmall = 2),"\n")
-      price_o <- m[i,3]
+    if(SELL_OKFT_BUY_BITF == 1){
+      PL_bitf <- (m[i,2] - avg_price_bitf) * sum(acc_b_btc) - balance_used * 0.002 * 2
+      PL_okft <- (m[i,3] - avg_price_okft) * sum(acc_o_btc) - balance_used * 0.0015 * 2
+      PL <- PL_bitf + PL_okft
+      
+      #CLOSE 1:
+      if((PL / (balance_used * 2) * 100 > cond_close
+          || PL / (balance_used * 2) * 100 < stop_loss
+          || i==nrow(m)) && trade_positive_difference == 1){
+        
+        temp <- acc_b_usd
+        acc_b_usd <- temp + sum(acc_b_btc) * (m[i,2]/sl) - abs(sum(acc_b_btc)) * m[i,2] * 0.002
+        acc_b_btc <- c()
+        temp <- acc_o_usd
+        acc_o_usd <- temp + sum(acc_o_btc) * (m[i,3]*sl) - abs(sum(acc_o_btc)) * m[i,3] * 0.0015
+        acc_o_btc <- c()
+        temp <- 0
+        hedge2 <- 0
+        order_btc_o <- 0
+        bal_btc_o <- acc_o_usd / m[i,3]
+        PL_o <- 0
+        hedge1 <- acc_o_usd / 100
+        
+        comm_b <- c(comm_b, acc_b_btc * m[i,2] * 0.002)
+        comm_o <- c(comm_o, acc_o_btc * m[i,3] * 0.0015)
+        profit_sum <- c(profit_sum, acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)
+        profit_perc <- c(profit_perc, (acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)/(s_acc_b_usd + s_acc_o_usd))
+        
+        end <- m[i,1]
+        if ((end - start)/3600 < 48){
+          duration <- c(duration, (end - start)/3600)
+        }
+        
+        cat("End deal:", as.character(as.POSIXct(m[i,1], origin = "1970-01-1")),
+            "Duration (H):",(end - start)/3600,
+            "Balance used:",format(round(balance_used,2)),"\n")
+        cat("Avg price OKFT:",format(round(avg_price_okft,2)),
+            "Avg price BITF:",format(round(avg_price_bitf,2)),"\n")
+        cat("OKFT price:", format(round(m[i,3],2), nsmall = 2),
+            "BITF price:", format(round(m[i,2],2), nsmall = 2),"\n")
+        cat("Balance OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+            "Balance BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+            "Amount OKFT BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),
+            "Amount BITF BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),"\n")
+        cat("PL OKFT:",format(round(PL_okft,2), nsmall = 2),
+            "PL BITF:",format(round(PL_bitf,2), nsmall = 2),
+            "PL:", format(round(PL,2), nsmall = 2),
+            "PL%:", format(round(PL / (balance_used * 2) * 100,2), nsmall = 2),"%\n", "\n")
+        
+        if(abs(acc_o_usd - acc_b_usd) / (acc_o_usd + acc_b_usd) > 0.1){
+          avg_balance <- (acc_o_usd + acc_b_usd) / 2
+          acc_o_usd <- avg_balance
+          acc_b_usd <- avg_balance
+        }
+        
+        trade <- 0
+        trade_positive_difference <- 0
+        start <- 0
+        end <- 0
+        temp <- 0
+        PL_okft <- 0
+        PL_bitf <- 0
+        PL <- 0
+        SELL_OKFT_BUY_BITF <- 0
+        next
       }
-
-    if(m[i,4] > diff * 1.096 && trade_positive_difference == 1){
-      min_acc <- min(acc_b_usd, acc_o_usd)
       
-      price_b <- m[i,2]
-      deal_b <- min_acc * acc_step_continue
-      comm_b <- c(comm_b, deal_b * 0.002)
-      temp <- acc_b_usd
-      acc_b_usd <- temp - deal_b * 0.002 - deal_b
-      acc_b_btc <- c(acc_b_btc, deal_b / (m[i,2]*sl))
-      
-      price_o <- m[i,3]
-      deal_o <- min_acc * acc_step_continue
-      comm_o <- c(comm_o, deal_o * 0.0015)
-      temp <- acc_o_usd
-      acc_o_usd <- temp - deal_o * 0.0015 + deal_o
-      acc_o_btc <- c(acc_o_btc, -deal_o / (m[i,3]/sl))
-      temp <- 0
-      temp <- hedge2
-      hedge2 <- temp + deal_o / 100
-      order_btc_o <- hedge2 * 100 / m[i,3]
-      
-      diff <- m[i,4]
-      
-      cat("Bitfinex price:", format(round(m[i,2],2), nsmall = 2),
-          "Okex price:", format(round(m[i,3],2), nsmall = 2),
-          "Difference:", format(round(m[i,4],2), nsmall = 2), "%\n")
-      cat("Deal Bitfinex:", format(round(deal_b,2), nsmall = 2),
-          "Deal Okex:", format(round(deal_o,2), nsmall = 2), "\n")
-      cat("Account Bitfinex USD:", format(round(acc_b_usd,2), nsmall = 2),
-          "Account Okex USD:", format(round(acc_o_usd,2), nsmall = 2),
-          "Account Bitfinex BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),
-          "Account Okex BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),"\n")
-      cat("hedge1:",format(round(hedge1,2), nsmall = 2),
-          "hedge2:",format(round(hedge2,2), nsmall = 2),
-          "Current PL Okex:",format(round(hedge2,4), nsmall = 4),"\n")
-    }
-    else{
-      if(m[i,4] < diff * 1.096 && trade_negative_difference == 1){
+      #SCALING 1
+      if(m[i,4] > diff + scaling & trade_positive_difference == 1
+         & min(acc_b_usd, acc_o_usd) / step_continue > 100){
+        #SCALING 1
+        #SELL OKFT & BUY BITF
+        
         min_acc <- min(acc_b_usd, acc_o_usd)
+        deal <- ((min_acc * step_continue) %/% 100) * 100
         
         price_b <- m[i,2]
-        deal_b <- min_acc * acc_step_continue
-        comm_b <- c(comm_b, deal_b * 0.002)
+        comm_b <- c(comm_b, deal * 0.002)
         temp <- acc_b_usd
-        acc_b_usd <- temp - deal_b * 0.002 + deal_b
-        acc_b_btc <- c(acc_b_btc, -deal_b / (m[i,2]/sl))
+        acc_b_usd <- temp - deal * 0.002 - deal
+        acc_b_btc <- c(acc_b_btc, deal / (m[i,2]*sl))
         
         price_o <- m[i,3]
-        deal_o <- min_acc * acc_step_continue
-        comm_o <- c(comm_o, deal_o * 0.0015)
+        comm_o <- c(comm_o, deal * 0.0015)
         temp <- acc_o_usd
-        acc_o_usd <- temp - deal_o * 0.0015 - deal_o
-        acc_o_btc <- c(acc_o_btc, deal_o / (m[i,3]*sl))
-        temp <- 0
-        temp <- hedge2
-        hedge2 <- temp + deal_o / 100
-        order_btc_o <- hedge2 * 100 / m[i,3]
+        acc_o_usd <- temp - deal * 0.0015 + deal
+        acc_o_btc <- c(acc_o_btc, -deal / (m[i,3]/sl))
+        
+        
+        balance_used <- balance_used + deal
+        avg_price_okft <- balance_used / sum(acc_o_btc)
+        avg_price_bitf <- -balance_used / sum(acc_b_btc)
         
         diff <- m[i,4]
         
-        cat("Bitfinex price:", format(round(m[i,2],2), nsmall = 2),
-            "Okex price:", format(round(m[i,3],2), nsmall = 2),
-            "Difference:", format(round(m[i,4],2), nsmall = 2), "%\n")
-        cat("Deal Bitfinex:", format(round(deal_b,2), nsmall = 2),
-            "Deal Okex:", format(round(deal_o,2), nsmall = 2), "\n")
-        cat("Account Bitfinex USD:", format(round(acc_b_usd,2), nsmall = 2),
-            "Account Okex USD:", format(round(acc_o_usd,2), nsmall = 2),
-            "Account Bitfinex BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),
-            "Account Okex BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),"\n")
-        cat("hedge1:",format(round(hedge1,2), nsmall = 2),
-            "hedge2:",format(round(hedge2,2), nsmall = 2),"\n")
+        cat("SCALING. OKFT price:", format(round(m[i,3],2), nsmall = 2),
+            "BITF price:", format(round(m[i,2],2), nsmall = 2),
+            "Diff:", format(round(m[i,4],2), nsmall = 2),
+            "% | DEAL=", format(round(deal,2), nsmall = 2),"\n")
+        cat("Balance OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+            "Balance BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+            "Amount OKFT BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),
+            "Amount BITF BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),"\n")
+        next
       }
-      else{
-        if(m[i,4] < hn && trade_positive_difference == 1 || i == nrow(m) && trade_positive_difference == 1){#Zakrivaem sdelki: pokupaem futures i prodaem bitfinex
-          temp <- acc_b_usd
-          acc_b_usd <- temp + sum(acc_b_btc) * (m[i,2]/sl) - abs(sum(acc_b_btc)) * m[i,2] * 0.002
-          acc_b_btc <- c()
-          temp <- acc_o_usd
-          acc_o_usd <- temp + sum(acc_o_btc) * (m[i,3]*sl) - abs(sum(acc_o_btc)) * m[i,3] * 0.0015
-          acc_o_btc <- c()
-          temp <- 0
-          hedge2 <- 0
-          order_btc_o <- 0
-          bal_btc_o <- acc_o_usd / m[i,3]
-          PL_o <- 0
-          hedge1 <- acc_o_usd / 100
-          
-          comm_b <- c(comm_b, acc_b_btc * m[i,2] * 0.002)
-          comm_o <- c(comm_o, acc_o_btc * m[i,3] * 0.0015)
-          profit_sum <- c(profit_sum, acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)
-          profit_perc <- c(profit_perc, (acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)/(s_acc_b_usd + s_acc_o_usd))
-          
-          end <- m[i,1]
-          if ((end - start)/3600 < 48){
-            duration <- c(duration, (end - start)/3600)
-          }
-          
-          cat("End deal:", as.character(as.POSIXct(m[i,1], origin = "1970-01-1")),
-              "Time in hours:",(end - start)/3600, "\n")
-          cat("Bitfinex price:", format(round(m[i,2],2), nsmall = 2),
-              "Okex price:", format(round(m[i,3],2), nsmall = 2),
-              "Difference:", format(round(m[i,4],2), nsmall = 2), "%\n")
-          cat("Account Bitfinex USD:", format(round(acc_b_usd,2), nsmall = 2),
-              "Account Okex USD:", format(round(acc_o_usd,2), nsmall = 2),
-              "Account Bitfinex BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),
-              "Account Okex BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),"\n")
-          cat("hedge1:",format(round(hedge1,2), nsmall = 2),
-              "hedge2:",format(round(hedge2,2), nsmall = 2),"\n")
-          cat("Profit sum:", format(round(acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd,2), nsmall = 2),
-              "Profit percent:", format(round((acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)/(s_acc_b_usd + s_acc_o_usd)*100,2), nsmall = 2),"%\n", "\n")
-          
-          if(abs(acc_b_usd / acc_o_usd - 1) * 100 > 10){
-            cat("Balance adjustment\n")
-            temp <- acc_b_usd + acc_o_usd
-            acc_b_usd <- temp / 2
-            acc_o_usd <- temp / 2
-            hedge1 <- acc_o_usd / 100
-            cat("Account Bitfinex USD:", format(round(acc_b_usd,2), nsmall = 2),
-                "Account Okex USD:", format(round(acc_o_usd,2), nsmall = 2),
-                "hedge1:",format(round(hedge1,2), nsmall = 2),"\n\n")
-          }
-          
-          hedge2 <- 0
-          trade <- 0
-          trade_positive_difference <- 0
-          start <- 0
-          end <- 0
-          temp <- 0
+    }
+    else{
+      PL_bitf <- (m[i,2] - avg_price_bitf) * sum(acc_b_btc) - balance_used * 0.002 * 2
+      PL_okft <- (m[i,3] - avg_price_okft) * sum(acc_o_btc) - balance_used * 0.0015 * 2
+      PL <- PL_bitf + PL_okft
+      
+      #CLOSE 2
+      if((PL / (balance_used * 2) * 100 > cond_close
+          | PL / (balance_used * 2) * 100 < stop_loss
+          | i==nrow(m)) & trade_negative_difference == 1){
         
+        temp <- acc_b_usd
+        acc_b_usd <- temp + sum(acc_b_btc) * (m[i,2]*sl) - abs(sum(acc_b_btc)) * m[i,2] * 0.002
+        acc_b_btc <- c()
+        temp <- acc_o_usd
+        acc_o_usd <- temp + sum(acc_o_btc) * (m[i,3]/sl) - abs(sum(acc_o_btc)) * m[i,3] * 0.0015
+        acc_o_btc <- c()
+        temp <- 0
+        hedge2 <- 0
+        order_btc_o <- 0
+        bal_btc_o <- acc_o_usd / m[i,3]
+        PL_o <- 0
+        hedge1 <- acc_o_usd / 100
+        
+        comm_b <- c(comm_b, acc_b_btc * m[i,2] * 0.002)
+        comm_o <- c(comm_o, acc_o_btc * m[i,3] * 0.0015)
+        profit_sum <- c(profit_sum, acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)
+        profit_perc <- c(profit_perc, (acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)/(s_acc_b_usd + s_acc_o_usd))
+        
+        end <- m[i,1]
+        if ((end - start)/3600 < 48){
+          duration <- c(duration, (end - start)/3600)
         }
-        else if(m[i,4] > ln && trade_negative_difference == 1 || i == nrow(m) && trade_negative_difference == 1){
-          temp <- acc_b_usd
-          acc_b_usd <- temp + sum(acc_b_btc) * (m[i,2]*sl) - abs(sum(acc_b_btc)) * m[i,2] * 0.002
-          acc_b_btc <- c()
-          temp <- acc_o_usd
-          acc_o_usd <- temp + sum(acc_o_btc) * (m[i,3]/sl) - abs(sum(acc_o_btc)) * m[i,3] * 0.0015
-          acc_o_btc <- c()
-          temp <- 0
-          hedge2 <- 0
-          order_btc_o <- 0
-          bal_btc_o <- acc_o_usd / m[i,3]
-          PL_o <- 0
-          hedge1 <- acc_o_usd / 100
-          
-          comm_b <- c(comm_b, acc_b_btc * m[i,2] * 0.002)
-          comm_o <- c(comm_o, acc_o_btc * m[i,3] * 0.0015)
-          profit_sum <- c(profit_sum, acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)
-          profit_perc <- c(profit_perc, (acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)/(s_acc_b_usd + s_acc_o_usd))
-          
-          end <- m[i,1]
-          if ((end - start)/3600 < 48){
-            duration <- c(duration, (end - start)/3600)
-          }
-          
-          cat("End deal:", as.character(as.POSIXct(m[i,1], origin = "1970-01-1")),
-              "Time in hours:",(end - start)/3600, "\n")
-          cat("Bitfinex price:", format(round(m[i,2],2), nsmall = 2),
-              "Okex price:", format(round(m[i,3],2), nsmall = 2),
-              "Difference:", format(round(m[i,4],2), nsmall = 2), "%\n")
-          cat("Account Bitfinex USD:", format(round(acc_b_usd,2), nsmall = 2),
-              "Account Okex USD:", format(round(acc_o_usd,2), nsmall = 2),
-              "Account Bitfinex BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),
-              "Account Okex BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),"\n")
-          cat("hedge1:",format(round(hedge1,2), nsmall = 2),
-              "hedge2:",format(round(hedge2,2), nsmall = 2),"\n")
-          cat("Profit sum:", format(round(acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd,2), nsmall = 2),
-              "Profit percent:", format(round((acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)/(s_acc_b_usd + s_acc_o_usd)*100,2), nsmall = 2),"%\n", "\n")
-          
-          if(abs(acc_b_usd / acc_o_usd - 1) * 100 > 10){
-            cat("Balance adjustment\n")
-            temp <- acc_b_usd + acc_o_usd
-            acc_b_usd <- temp / 2
-            acc_o_usd <- temp / 2
-            hedge1 <- acc_o_usd / 100
-            cat("Account Bitfinex USD:", format(round(acc_b_usd,2), nsmall = 2),
-                "Account Okex USD:", format(round(acc_o_usd,2), nsmall = 2),
-                "hedge1:",format(round(hedge1,2), nsmall = 2),"\n\n")
-          }
-          
-          hedge2 <- 0
-          trade <- 0
-          trade_negative_difference <- 0
-          start <- 0
-          end <- 0
-          temp <- 0
+        
+        cat("End deal:", as.character(as.POSIXct(m[i,1], origin = "1970-01-1")),
+            "Duration (H):",(end - start)/3600,
+            "Balance used:",format(round(balance_used,2)),"\n")
+        cat("Avg price OKFT:",format(round(avg_price_okft,2)),
+            "Avg price BITF:",format(round(avg_price_bitf,2)),"\n")
+        cat("OKFT price:", format(round(m[i,3],2), nsmall = 2),
+            "BITF price:", format(round(m[i,2],2), nsmall = 2),"\n")
+        cat("Balance OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+            "Balance BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+            "Amount OKFT BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),
+            "Amount BITF BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),"\n")
+        cat("PL OKFT:",format(round(PL_okft,2), nsmall = 2),
+            "PL BITF:",format(round(PL_bitf,2), nsmall = 2),
+            "PL:", format(round(PL,2), nsmall = 2),
+            "PL%:", format(round(PL / (balance_used * 2) * 100,2), nsmall = 2),"%\n", "\n")
+        
+        if(abs(acc_o_usd - acc_b_usd) / (acc_o_usd + acc_b_usd) > 0.1){
+          avg_balance <- (acc_o_usd + acc_b_usd) / 2
+          acc_o_usd <- avg_balance
+          acc_b_usd <- avg_balance
         }
+        
+        trade <- 0
+        trade_negative_difference <- 0
+        start <- 0
+        end <- 0
+        temp <- 0
+        PL_okft <- 0
+        PL_bitf <- 0
+        PL <- 0
+        BUY_OKFT_SELL_BITF <- 0
+        next
+      }
+      
+      if(m[i,4] < diff - scaling & trade_negative_difference == 1
+         & min(acc_b_usd, acc_o_usd) / step_continue > 100){
+        #SCALING 2
+        #BUY OKFT & SELL BITF
+        
+        min_acc <- min(acc_b_usd, acc_o_usd)
+        deal <- ((min_acc * step_continue) %/% 100) * 100
+        
+        price_b <- m[i,2]
+        comm_b <- c(comm_b, deal * 0.002)
+        temp <- acc_b_usd
+        acc_b_usd <- temp - deal * 0.002 + deal
+        acc_b_btc <- c(acc_b_btc, -deal / (m[i,2]/sl))
+        
+        price_o <- m[i,3]
+        comm_o <- c(comm_o, deal * 0.0015)
+        temp <- acc_o_usd
+        acc_o_usd <- temp - deal * 0.0015 - deal
+        acc_o_btc <- c(acc_o_btc, deal / (m[i,3]*sl))
+        
+        balance_used <- balance_used + deal
+        avg_price_okft <- -balance_used / sum(acc_o_btc)
+        avg_price_bitf <- balance_used / sum(acc_b_btc)
+        
+        diff <- m[i,4]
+        
+        cat("SCALING. OKFT price:", format(round(m[i,3],2), nsmall = 2),
+            "BITF price:", format(round(m[i,2],2), nsmall = 2),
+            "Diff:", format(round(m[i,4],2), nsmall = 2),
+            "% | DEAL=", format(round(deal,2), nsmall = 2),"\n")
+        cat("Balance OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+            "Balance BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+            "Amount OKFT BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),
+            "Amount BITF BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),"\n")
+        next
       }
     }
   }
@@ -412,3 +401,372 @@ if (TRUE){
   cat("Min profit:",min(profit_sum),"\n")
   cat("Paid commission:",sum(comm_b)+sum(comm_o),"\n")
 }
+
+##########################################################
+########TEST
+
+res <- data.frame(matrix(ncol = 6, nrow = 0))
+x <- c("cond_open_sell_okft_buy_bitf", "cond_open_buy_okft_sell_bitf","scaling",
+       "cond_close","profit", "deals")
+colnames(res) <- x
+for(cond_open_sell_okft_buy_bitf in seq(0.3,6.0,by=0.3)){
+  cond_open_buy_okft_sell_bitf <- -cond_open_sell_okft_buy_bitf
+  for(scaling in seq(1.0,3.0,by=0.5)){
+    for(cond_close in seq(0.6,3.0,by=0.2)){
+      
+      t1 <- Sys.time()
+      trade <- 0
+      trade_positive_difference <- 0
+      trade_negative_difference <- 0
+      start <- 0
+      end <- 0
+      price_b <- 0
+      price_o <- 0
+      avg_price_bitf <- 0
+      avg_price_okft <- 0
+      balance_used <- 0
+      diff <- 0
+      start_acc_b_usd <- 4000
+      start_acc_o_usd <- 4000
+      acc_b_usd <- 4000
+      acc_o_usd <- 4000
+      bal_btc_o <- acc_o_usd / m[1,3]
+      order_btc_o <- 0
+      PL_o <- 0
+      hedge1 <- (bal_btc_o * m[1,3]) %/% 100
+      hedge2 <- 0
+      acc_step_entry <- 0.1
+      acc_step_continue <- 0.3
+      acc_b_btc <- c()
+      acc_o_btc <- c()
+      s_acc_b_usd <- 0
+      s_acc_o_usd <- 0
+      deal <- 0
+      comm_b <- c()
+      comm_o <- c()
+      profit_sum <- c()
+      profit_perc <- c()
+      duration <- c()
+      SELL_OKFT_BUY_BITF <- 0
+      BUY_OKFT_SELL_BITF <- 0
+      
+      for(i in 20:nrow(m)){
+        if(trade == 0){
+          if(m[i,4] > cond_open_sell_okft_buy_bitf){
+            trade <- 1
+            trade_positive_difference <- 1
+            #OPEN 1
+            #SELL OKFT & BUY BITF
+            min_acc <- min(acc_b_usd, acc_o_usd)
+            deal <- ((min_acc * step_entry) %/% 100) * 100
+            
+            price_b = m[i,2]
+            comm_b <- c(comm_b, deal * 0.002)
+            s_acc_b_usd <- acc_b_usd
+            temp <- acc_b_usd
+            acc_b_usd <- temp - deal - deal * 0.002
+            acc_b_btc <- c(acc_b_btc, deal / (m[i,2]*sl))
+            avg_price_bitf <- price_b
+            
+            
+            price_o = m[i,3]
+            comm_o <- c(comm_o, deal * 0.0015)
+            s_acc_o_usd <- acc_o_usd
+            temp <- acc_o_usd
+            acc_o_usd <- temp + deal - deal * 0.0015
+            acc_o_btc <- c(acc_o_btc, -deal / (m[i,3]/sl))
+            temp <- 0
+            avg_price_okft <- price_o
+            balance_used <- deal
+            
+            SELL_OKFT_BUY_BITF <- 1
+            start <- m[i,1]
+            diff <- m[i,4]
+            # cat("Start. SELL OKFT & BUY BITF | DEAL=", format(round(deal,2), nsmall = 2), "\n")
+            # cat("Balance OKFT:", format(round(s_acc_o_usd,2), nsmall = 2),
+            #     "Balance BITF:", format(round(s_acc_b_usd,2), nsmall = 2),"\n")
+            # cat("OKFT price:", format(round(m[i,3],2), nsmall = 2),
+            #     "BITF price:", format(round(m[i,2],2), nsmall = 2),
+            #     "DIFF:", format(round(m[i,4],2), nsmall = 2), "%\n")
+            # cat("Amount OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+            #     "Amount BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+            #     "Amount OKFT BTC:", format(round(sum(acc_o_btc),4), nsmall = 4),
+            #     "Amount BITF BTC:", format(round(sum(acc_b_btc),4), nsmall = 4),"\n")
+            next
+          }
+          else {
+            if(m[i,4] < cond_open_buy_okft_sell_bitf){
+              trade <- 1
+              trade_negative_difference <- 1
+              #OPEN 2
+              #BUY OKFT & SELL BITF
+              min_acc <- min(acc_b_usd, acc_o_usd)
+              deal <- ((min_acc * step_entry) %/% 100) * 100
+              
+              price_b = m[i,2]
+              comm_b <- c(comm_b, deal * 0.002)
+              s_acc_b_usd <- acc_b_usd
+              temp <- acc_b_usd
+              acc_b_usd <- temp + deal - deal * 0.002
+              acc_b_btc <- c(acc_b_btc, -deal / (m[i,2]/sl))
+              avg_price_bitf <- price_b
+              
+              price_o = m[i,3]
+              comm_o <- c(comm_o, deal * 0.0015)
+              s_acc_o_usd <- acc_o_usd
+              temp <- acc_o_usd
+              acc_o_usd <- temp - deal - deal * 0.0015
+              acc_o_btc <- c(acc_o_btc, deal / (m[i,3]*sl))
+              temp <- 0
+              avg_price_okft <- price_o
+              balance_used <- deal
+              
+              BUY_OKFT_SELL_BITF <- 1
+              start <- m[i,1]
+              diff <- m[i,4]
+              # cat("Start. BUY OKFT & SELL BITF | DEAL=", format(round(deal,2), nsmall = 2), "\n")
+              # cat("Balance OKFT:", format(round(s_acc_o_usd,2), nsmall = 2),
+              #     "Balance BITF:", format(round(s_acc_b_usd,2), nsmall = 2),"\n")
+              # cat("OKFT price:", format(round(m[i,3],2), nsmall = 2),
+              #     "BITF price:", format(round(m[i,2],2), nsmall = 2),
+              #     "DIFF:", format(round(m[i,4],2), nsmall = 2), "%\n")
+              # cat("Amount OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+              #     "Amount BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+              #     "Amount OKFT BTC:", format(round(sum(acc_o_btc),4), nsmall = 4),
+              #     "Amount BITF BTC:", format(round(sum(acc_b_btc),4), nsmall = 4),"\n")
+              next
+            }
+          }
+        }
+        else{
+          if(SELL_OKFT_BUY_BITF == 1){
+            PL_bitf <- (m[i,2] - avg_price_bitf) * sum(acc_b_btc) - balance_used * 0.002 * 2
+            PL_okft <- (m[i,3] - avg_price_okft) * sum(acc_o_btc) - balance_used * 0.0015 * 2
+            PL <- PL_bitf + PL_okft
+            
+            #CLOSE 1:
+            if((PL / (balance_used * 2) * 100 > cond_close
+                || PL / (balance_used * 2) * 100 < stop_loss
+                || i==nrow(m)) && trade_positive_difference == 1){
+              
+              temp <- acc_b_usd
+              acc_b_usd <- temp + sum(acc_b_btc) * (m[i,2]/sl) - abs(sum(acc_b_btc)) * m[i,2] * 0.002
+              acc_b_btc <- c()
+              temp <- acc_o_usd
+              acc_o_usd <- temp + sum(acc_o_btc) * (m[i,3]*sl) - abs(sum(acc_o_btc)) * m[i,3] * 0.0015
+              acc_o_btc <- c()
+              temp <- 0
+              hedge2 <- 0
+              order_btc_o <- 0
+              bal_btc_o <- acc_o_usd / m[i,3]
+              PL_o <- 0
+              hedge1 <- acc_o_usd / 100
+              
+              comm_b <- c(comm_b, acc_b_btc * m[i,2] * 0.002)
+              comm_o <- c(comm_o, acc_o_btc * m[i,3] * 0.0015)
+              profit_sum <- c(profit_sum, acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)
+              profit_perc <- c(profit_perc, (acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)/(s_acc_b_usd + s_acc_o_usd))
+              
+              end <- m[i,1]
+              if ((end - start)/3600 < 48){
+                duration <- c(duration, (end - start)/3600)
+              }
+              
+              # cat("End deal:", as.character(as.POSIXct(m[i,1], origin = "1970-01-1")),
+              #     "Duration (H):",(end - start)/3600,
+              #     "Balance used:",format(round(balance_used,2)),"\n")
+              # cat("Avg price OKFT:",format(round(avg_price_okft,2)),
+              #     "Avg price BITF:",format(round(avg_price_bitf,2)),"\n")
+              # cat("OKFT price:", format(round(m[i,3],2), nsmall = 2),
+              #     "BITF price:", format(round(m[i,2],2), nsmall = 2),"\n")
+              # cat("Balance OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+              #     "Balance BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+              #     "Amount OKFT BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),
+              #     "Amount BITF BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),"\n")
+              # cat("PL OKFT:",format(round(PL_okft,2), nsmall = 2),
+              #     "PL BITF:",format(round(PL_bitf,2), nsmall = 2),
+              #     "PL:", format(round(PL,2), nsmall = 2),
+              #     "PL%:", format(round(PL / (balance_used * 2) * 100,2), nsmall = 2),"%\n", "\n")
+              
+              if(abs(acc_o_usd - acc_b_usd) / (acc_o_usd + acc_b_usd) > 0.1){
+                avg_balance <- (acc_o_usd + acc_b_usd) / 2
+                acc_o_usd <- avg_balance
+                acc_b_usd <- avg_balance
+              }
+              
+              trade <- 0
+              trade_positive_difference <- 0
+              start <- 0
+              end <- 0
+              temp <- 0
+              PL_okft <- 0
+              PL_bitf <- 0
+              PL <- 0
+              SELL_OKFT_BUY_BITF <- 0
+              next
+            }
+            
+            #SCALING 1
+            if(m[i,4] > diff + scaling & trade_positive_difference == 1
+               & min(acc_b_usd, acc_o_usd) / step_continue > 100){
+              #SCALING 1
+              #SELL OKFT & BUY BITF
+              
+              min_acc <- min(acc_b_usd, acc_o_usd)
+              deal <- ((min_acc * step_continue) %/% 100) * 100
+              
+              price_b <- m[i,2]
+              comm_b <- c(comm_b, deal * 0.002)
+              temp <- acc_b_usd
+              acc_b_usd <- temp - deal * 0.002 - deal
+              acc_b_btc <- c(acc_b_btc, deal / (m[i,2]*sl))
+              
+              price_o <- m[i,3]
+              comm_o <- c(comm_o, deal * 0.0015)
+              temp <- acc_o_usd
+              acc_o_usd <- temp - deal * 0.0015 + deal
+              acc_o_btc <- c(acc_o_btc, -deal / (m[i,3]/sl))
+              
+              
+              balance_used <- balance_used + deal
+              avg_price_okft <- balance_used / sum(acc_o_btc)
+              avg_price_bitf <- -balance_used / sum(acc_b_btc)
+              
+              diff <- m[i,4]
+              
+              # cat("SCALING. OKFT price:", format(round(m[i,3],2), nsmall = 2),
+              #     "BITF price:", format(round(m[i,2],2), nsmall = 2),
+              #     "Diff:", format(round(m[i,4],2), nsmall = 2),
+              #     "% | DEAL=", format(round(deal,2), nsmall = 2),"\n")
+              # cat("Balance OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+              #     "Balance BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+              #     "Amount OKFT BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),
+              #     "Amount BITF BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),"\n")
+              next
+            }
+          }
+          else{
+            PL_bitf <- (m[i,2] - avg_price_bitf) * sum(acc_b_btc) - balance_used * 0.002 * 2
+            PL_okft <- (m[i,3] - avg_price_okft) * sum(acc_o_btc) - balance_used * 0.0015 * 2
+            PL <- PL_bitf + PL_okft
+            
+            #CLOSE 2
+            if((PL / (balance_used * 2) * 100 > cond_close
+                | PL / (balance_used * 2) * 100 < stop_loss
+                | i==nrow(m)) & trade_negative_difference == 1){
+              
+              temp <- acc_b_usd
+              acc_b_usd <- temp + sum(acc_b_btc) * (m[i,2]*sl) - abs(sum(acc_b_btc)) * m[i,2] * 0.002
+              acc_b_btc <- c()
+              temp <- acc_o_usd
+              acc_o_usd <- temp + sum(acc_o_btc) * (m[i,3]/sl) - abs(sum(acc_o_btc)) * m[i,3] * 0.0015
+              acc_o_btc <- c()
+              temp <- 0
+              hedge2 <- 0
+              order_btc_o <- 0
+              bal_btc_o <- acc_o_usd / m[i,3]
+              PL_o <- 0
+              hedge1 <- acc_o_usd / 100
+              
+              comm_b <- c(comm_b, acc_b_btc * m[i,2] * 0.002)
+              comm_o <- c(comm_o, acc_o_btc * m[i,3] * 0.0015)
+              profit_sum <- c(profit_sum, acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)
+              profit_perc <- c(profit_perc, (acc_b_usd - s_acc_b_usd + acc_o_usd - s_acc_o_usd)/(s_acc_b_usd + s_acc_o_usd))
+              
+              end <- m[i,1]
+              if ((end - start)/3600 < 48){
+                duration <- c(duration, (end - start)/3600)
+              }
+              
+              # cat("End deal:", as.character(as.POSIXct(m[i,1], origin = "1970-01-1")),
+              #     "Duration (H):",(end - start)/3600,
+              #     "Balance used:",format(round(balance_used,2)),"\n")
+              # cat("Avg price OKFT:",format(round(avg_price_okft,2)),
+              #     "Avg price BITF:",format(round(avg_price_bitf,2)),"\n")
+              # cat("OKFT price:", format(round(m[i,3],2), nsmall = 2),
+              #     "BITF price:", format(round(m[i,2],2), nsmall = 2),"\n")
+              # cat("Balance OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+              #     "Balance BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+              #     "Amount OKFT BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),
+              #     "Amount BITF BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),"\n")
+              # cat("PL OKFT:",format(round(PL_okft,2), nsmall = 2),
+              #     "PL BITF:",format(round(PL_bitf,2), nsmall = 2),
+              #     "PL:", format(round(PL,2), nsmall = 2),
+              #     "PL%:", format(round(PL / (balance_used * 2) * 100,2), nsmall = 2),"%\n", "\n")
+              
+              if(abs(acc_o_usd - acc_b_usd) / (acc_o_usd + acc_b_usd) > 0.1){
+                avg_balance <- (acc_o_usd + acc_b_usd) / 2
+                acc_o_usd <- avg_balance
+                acc_b_usd <- avg_balance
+              }
+              
+              trade <- 0
+              trade_negative_difference <- 0
+              start <- 0
+              end <- 0
+              temp <- 0
+              PL_okft <- 0
+              PL_bitf <- 0
+              PL <- 0
+              BUY_OKFT_SELL_BITF <- 0
+              next
+            }
+            
+            if(m[i,4] < diff - scaling & trade_negative_difference == 1
+               & min(acc_b_usd, acc_o_usd) / step_continue > 100){
+              #SCALING 2
+              #BUY OKFT & SELL BITF
+              
+              min_acc <- min(acc_b_usd, acc_o_usd)
+              deal <- ((min_acc * step_continue) %/% 100) * 100
+              
+              price_b <- m[i,2]
+              comm_b <- c(comm_b, deal * 0.002)
+              temp <- acc_b_usd
+              acc_b_usd <- temp - deal * 0.002 + deal
+              acc_b_btc <- c(acc_b_btc, -deal / (m[i,2]/sl))
+              
+              price_o <- m[i,3]
+              comm_o <- c(comm_o, deal * 0.0015)
+              temp <- acc_o_usd
+              acc_o_usd <- temp - deal * 0.0015 - deal
+              acc_o_btc <- c(acc_o_btc, deal / (m[i,3]*sl))
+              
+              balance_used <- balance_used + deal
+              avg_price_okft <- -balance_used / sum(acc_o_btc)
+              avg_price_bitf <- balance_used / sum(acc_b_btc)
+              
+              diff <- m[i,4]
+              
+              # cat("SCALING. OKFT price:", format(round(m[i,3],2), nsmall = 2),
+              #     "BITF price:", format(round(m[i,2],2), nsmall = 2),
+              #     "Diff:", format(round(m[i,4],2), nsmall = 2),
+              #     "% | DEAL=", format(round(deal,2), nsmall = 2),"\n")
+              # cat("Balance OKFT USD:", format(round(acc_o_usd,2), nsmall = 2),
+              #     "Balance BITF USD:", format(round(acc_b_usd,2), nsmall = 2),
+              #     "Amount OKFT BTC:", format(round(sum(acc_o_btc),2), nsmall = 2),
+              #     "Amount BITF BTC:", format(round(sum(acc_b_btc),2), nsmall = 2),"\n")
+              next
+            }
+          }
+        }
+      }
+      
+      t2 <- Sys.time()
+      t2-t1
+      cat("open1=",cond_open_sell_okft_buy_bitf,"open2=",cond_open_buy_okft_sell_bitf,
+          "scaling",scaling,"close=",cond_close,
+          "Total profit percent:", format(round(((sum(profit_sum)+8000)/8000-1)*100,2), nsmall = 2),
+          "% Total deals:",length(profit_sum),"time:",format(round(t2-t1,2), nsmall = 2),"\n")
+      df <- data.frame(cond_open_sell_okft_buy_bitf,cond_open_buy_okft_sell_bitf,scaling,
+                       cond_close,format(round(((sum(profit_sum)+8000)/8000-1)*100,2), nsmall = 2),length(profit_sum))
+      x <- c("cond_open_sell_okft_buy_bitf", "cond_open_buy_okft_sell_bitf","scaling",
+             "cond_close","profit", "deals")
+      colnames(df) <- x
+      res <- rbind(res,df)
+    }
+  }
+}
+setwd("C:/btc/Strategy/R_Strategy_Arb/Arbitration/Okex_Bitfinex_BTCUSD")
+write.csv(res, "OKFT_BITF_cond.csv", row.names = FALSE)
+      
