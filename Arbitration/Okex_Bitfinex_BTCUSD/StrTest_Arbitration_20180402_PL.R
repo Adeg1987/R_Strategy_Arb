@@ -40,13 +40,13 @@ gc()
 cat("\014")
 
 sl <- 1.0001
-cond_open_sell_okft_buy_bitf <- 3.0
-cond_open_buy_okft_sell_bitf <- -3.0
-cond_close <- 0.9
+cond_open_sell_okft_buy_bitf <- 1.2
+cond_open_buy_okft_sell_bitf <- -1.4
+cond_close <- 0.6
 stop_loss <- -30.0
-step_entry <- 0.2
+step_entry <- 0.15
 step_continue <- 0.35
-scaling <- 1.4
+scaling <- 1.5
 
 trade <- 0
 trade_positive_difference <- 0
@@ -262,8 +262,8 @@ for(i in 20:nrow(m)){
         
         
         balance_used <- balance_used + deal
-        avg_price_okft <- balance_used / sum(acc_o_btc)
-        avg_price_bitf <- -balance_used / sum(acc_b_btc)
+        avg_price_okft <- -balance_used / sum(acc_o_btc)
+        avg_price_bitf <- balance_used / sum(acc_b_btc)
         
         diff <- m[i,4]
         
@@ -366,8 +366,8 @@ for(i in 20:nrow(m)){
         acc_o_btc <- c(acc_o_btc, deal / (m[i,3]*sl))
         
         balance_used <- balance_used + deal
-        avg_price_okft <- -balance_used / sum(acc_o_btc)
-        avg_price_bitf <- balance_used / sum(acc_b_btc)
+        avg_price_okft <- balance_used / sum(acc_o_btc)
+        avg_price_bitf <- -balance_used / sum(acc_b_btc)
         
         diff <- m[i,4]
         
@@ -405,14 +405,13 @@ if (TRUE){
 ##########################################################
 ########TEST
 
-res <- data.frame(matrix(ncol = 6, nrow = 0))
-x <- c("cond_open_sell_okft_buy_bitf", "cond_open_buy_okft_sell_bitf","scaling",
+res <- data.frame(matrix(ncol = 5, nrow = 0))
+x <- c("cond_open_sell_okft_buy_bitf", "cond_open_buy_okft_sell_bitf",
        "cond_close","profit", "deals")
 colnames(res) <- x
-for(cond_open_sell_okft_buy_bitf in seq(0.3,6.0,by=0.3)){
-  cond_open_buy_okft_sell_bitf <- -cond_open_sell_okft_buy_bitf
-  for(scaling in seq(1.0,3.0,by=0.5)){
-    for(cond_close in seq(0.6,3.0,by=0.2)){
+for(cond_open_sell_okft_buy_bitf in seq(1.0,2.0,by=0.1)){
+  for(cond_open_buy_okft_sell_bitf in seq(-1.0,-2.0,by=-0.1)){
+    for(cond_close in seq(0.4,0.8,by=0.1)){
       
       t1 <- Sys.time()
       trade <- 0
@@ -629,8 +628,8 @@ for(cond_open_sell_okft_buy_bitf in seq(0.3,6.0,by=0.3)){
               
               
               balance_used <- balance_used + deal
-              avg_price_okft <- balance_used / sum(acc_o_btc)
-              avg_price_bitf <- -balance_used / sum(acc_b_btc)
+              avg_price_okft <- -balance_used / sum(acc_o_btc)
+              avg_price_bitf <- balance_used / sum(acc_b_btc)
               
               diff <- m[i,4]
               
@@ -733,8 +732,8 @@ for(cond_open_sell_okft_buy_bitf in seq(0.3,6.0,by=0.3)){
               acc_o_btc <- c(acc_o_btc, deal / (m[i,3]*sl))
               
               balance_used <- balance_used + deal
-              avg_price_okft <- -balance_used / sum(acc_o_btc)
-              avg_price_bitf <- balance_used / sum(acc_b_btc)
+              avg_price_okft <- balance_used / sum(acc_o_btc)
+              avg_price_bitf <- -balance_used / sum(acc_b_btc)
               
               diff <- m[i,4]
               
@@ -755,12 +754,12 @@ for(cond_open_sell_okft_buy_bitf in seq(0.3,6.0,by=0.3)){
       t2 <- Sys.time()
       t2-t1
       cat("open1=",cond_open_sell_okft_buy_bitf,"open2=",cond_open_buy_okft_sell_bitf,
-          "scaling",scaling,"close=",cond_close,
+          "close=",cond_close,
           "Total profit percent:", format(round(((sum(profit_sum)+8000)/8000-1)*100,2), nsmall = 2),
           "% Total deals:",length(profit_sum),"time:",format(round(t2-t1,2), nsmall = 2),"\n")
-      df <- data.frame(cond_open_sell_okft_buy_bitf,cond_open_buy_okft_sell_bitf,scaling,
+      df <- data.frame(cond_open_sell_okft_buy_bitf,cond_open_buy_okft_sell_bitf,
                        cond_close,format(round(((sum(profit_sum)+8000)/8000-1)*100,2), nsmall = 2),length(profit_sum))
-      x <- c("cond_open_sell_okft_buy_bitf", "cond_open_buy_okft_sell_bitf","scaling",
+      x <- c("cond_open_sell_okft_buy_bitf", "cond_open_buy_okft_sell_bitf",
              "cond_close","profit", "deals")
       colnames(df) <- x
       res <- rbind(res,df)
@@ -768,5 +767,5 @@ for(cond_open_sell_okft_buy_bitf in seq(0.3,6.0,by=0.3)){
   }
 }
 setwd("C:/btc/Strategy/R_Strategy_Arb/Arbitration/Okex_Bitfinex_BTCUSD")
-write.csv(res, "OKFT_BITF_cond.csv", row.names = FALSE)
+write.csv(res, "OKFT_BITF_cond2.csv", row.names = FALSE)
       
