@@ -1,63 +1,45 @@
 library(dplyr)
-library(plyr)
 library(zoo)
 library(forecast)
 library(lubridate)
 library(data.table)
 
-setwd("C:/btc/Orderbook/Bitfinex/BTCUSD")
-BTCUSD <- read.csv("BITF_BTCUSD_ob_20170810_20180211.csv", header = TRUE)
+#NO ORDERBOOK, JUST TRADES
 
-setwd("C:/btc/Orderbook/Bitfinex/IOTBTC")
-IOTBTC <- read.csv("BITF_IOTBTC_ob_20170810_20180211.csv", header = TRUE)
+setwd("C:/btc/Tics/Bitfinex/BTCUSD")
+BTCUSD <- read.csv("BITF_BTCUSD_20180101_20180506.csv", header = TRUE)
 
-setwd("C:/btc/Orderbook/Bitfinex/IOTUSD")
-IOTUSD <- read.csv("BITF_IOTUSD_ob_20170810_20180211.csv", header = TRUE)
+setwd("C:/btc/Tics/Bitfinex/IOTBTC")
+IOTBTC <- read.csv("BITF_IOTBTC_20180101_20180506.csv", header = TRUE)
 
-BTCUSD$date <- as.POSIXct(BTCUSD$date %/% 1000, origin="1970-01-01", tz="GMT")
-BTCUSD$day <- as.Date(BTCUSD$date, 'GMT')
-BTCUSD$H <- hour(BTCUSD$date)
-BTCUSD$M <- minute(BTCUSD$date)
-IOTBTC$date <- as.POSIXct(IOTBTC$date %/% 1000, origin="1970-01-01", tz="GMT")
-IOTBTC$day <- as.Date(IOTBTC$date, 'GMT')
-IOTBTC$H <- hour(IOTBTC$date)
-IOTBTC$M <- minute(IOTBTC$date)
-IOTUSD$date <- as.POSIXct(IOTUSD$date %/% 1000, origin="1970-01-01", tz="GMT")
-IOTUSD$day <- as.Date(IOTUSD$date, 'GMT')
-IOTUSD$H <- hour(IOTUSD$date)
-IOTUSD$M <- minute(IOTUSD$date)
-BTCUSD <- data.table(BTCUSD)
-IOTBTC <- data.table(IOTBTC)
-IOTUSD <- data.table(IOTUSD)
-require(data.table)
-IOT <- BTCUSD[IOTBTC[IOTUSD, mult = "first", on = c("day","H", "M", "Index"), nomatch = 0L],
-              mult = "first", on = c("day","H", "M", "Index"), nomatch = 0L]
-IOT <- IOT[,-c(7:10,15)]
-colnames(IOT) <- c("Date","Index","BTC/USD_bid","BTC/USD_ask","BTC/USD_am_bid",
-                   "BTC/USD_am_ask","IOT/BTC_bid","IOT/BTC_ask","IOT/BTC_am_bid",
-                   "IOT/BTC_am_ask","IOT/USD_bid","IOT/USD_ask","IOT/USD_am_bid",
-                   "IOT/USD_am_ask")
-IOT$Date <- as.numeric(IOT$Date)
-IOT <- na.locf(IOT)
-IOT$"IOT/BTC/USD_bid" <- IOT$"BTC/USD_bid" * IOT$"IOT/BTC_bid"
-IOT$"IOT/BTC/USD_ask" <- IOT$"BTC/USD_ask" * IOT$"IOT/BTC_ask"
-IOT$S1 <- round((IOT$"IOT/USD_bid" / IOT$"IOT/BTC/USD_ask" - 1) * 100, 2)
-IOT$S2 <- round((IOT$"IOT/USD_ask" / IOT$"IOT/BTC/USD_bid" - 1) * 100, 2)
-IOT <- IOT[order(IOT[,1],IOT[,2]),]
-IOT <- unique(IOT, by=c("Date", "Index"))
-IOT <- IOT[!duplicated(IOT),]
+setwd("C:/btc/Tics/Bitfinex/IOTUSD")
+IOTUSD <- read.csv("BITF_IOTUSD_20180101_20180506.csv", header = TRUE)
+
+time_df <- data.frame(Timestamp = c(1514678401:1525651177), index = 1)
+
+IOT <- time_df %>%
+  left_join(BTCUSD, by = "Timestamp") %>%
+  mutate(BTCUSD_bid = price / 1.00001, BTCUSD_ask = price * 1.00001, BTCUSD_am_bid = 0, BTCUSD_am_ask = 0) %>%
+  select(-price) %>%
+  left_join(IOTBTC, by = "Timestamp") %>%
+  mutate(IOTBTC_bid = price / 1.001, IOTBTC_ask = price * 1.001, IOTBTC_am_bid = 0, IOTBTC_am_ask = 0) %>%
+  select(-price) %>%
+  left_join(IOTUSD, by = "Timestamp") %>%
+  mutate(IOTUSD_bid = price / 1.00001, IOTUSD_ask = price * 1.001, IOTUSD_am_bid = 0, IOTUSD_am_ask = 0) %>%
+  select(-price) %>%
+  imputeTS::na.interpolation() %>%
+  mutate(IOTBTCUSD_bid = BTCUSD_bid * IOTBTC_bid, IOTBTCUSD_ask = BTCUSD_ask * IOTBTC_ask)
 
 head(IOT,10)
-str(IOT)
 
 m <- data.matrix(IOT)
-rm(BTCUSD,IOTBTC,IOTUSD,IOT)
+rm(BTCUSD,IOTBTC,IOTUSD,IOT, time_df)
 gc()
 cat("\014")
 
-cond_open <- -2.8
+cond_open <- -1.0
 cond_close <- 0.5
-stop_loss <- -30.0
+stop_loss <- -5.0
 stop_loss_dur <- 86400 * 100
 trail <- 0.0
 trade <- 0
@@ -82,13 +64,13 @@ profit_perc <- c()
 duration <- c()
 BuyIOTBTC <- 0
 BuyIOTUSD <- 0
-step_entry <- 0.5
-step_continue <- 0.3
+step_entry <- 0.25
+step_continue <- 0.25
 comm <- c()
 scaling <- 1.4
 BTCUSD_cond <- 0
 
-for(i in seq(11, nrow(m), by = 5)){
+for(i in 1:nrow(m)){
   if(balance_usd <= 0) break
   if(trade == 0){
     if(((m[i,16]/m[i,11])-1)*100 < cond_open){
@@ -502,9 +484,9 @@ if (TRUE){
 res <- data.frame(matrix(ncol = 5, nrow = 0))
 x <- c("cond_open", "cond_close","step_entry","profit", "deals")
 colnames(res) <- x
-for(cond_open in seq(-3.0,0.4,by=0.1)){
-  for(cond_close in seq(0.1,2.0,by=0.1)){
-    for(step_entry in seq(0.1,0.5,by=0.05)){
+for(cond_open in seq(-1.5,0.0,by=0.1)){
+  for(cond_close in seq(0.1,1.0,by=0.1)){
+    for(step_entry in seq(0.1,0.3,by=0.05)){
     
     t1 <- Sys.time()
     trade <- 0
@@ -530,7 +512,7 @@ for(cond_open in seq(-3.0,0.4,by=0.1)){
     BuyIOTBTC <- 0
     BuyIOTUSD <- 0
     #step_entry <- 0.2
-    step_continue <- 0.35
+    step_continue <- 0.25
     comm <- c()
     scaling <- 1.4
     BTCUSD_cond <- 0
@@ -942,7 +924,7 @@ for(cond_open in seq(-3.0,0.4,by=0.1)){
     }
   }
 }
-setwd("C:/btc/Strategy/Arbitration/Bitfinex_IOT_BTC_USD")
+setwd("C:/btc/Strategy/R_Strategy_Arb/Arbitration/Bitfinex_IOT_BTC_USD")
 write.csv(res, "IOT_cond.csv", row.names = FALSE)
 
 
