@@ -7,13 +7,13 @@ library(data.table)
 #NO ORDERBOOK, JUST TRADES
 
 setwd("C:/btc/Tics/Bitfinex/BTCUSD")
-BTCUSD <- read.csv("BITF_BTCUSD_20180101_20180506.csv", header = TRUE)
+BTCUSD <- fread("BITF_BTCUSD_20180101_20180506.csv", header = TRUE)
 
 setwd("C:/btc/Tics/Bitfinex/IOTBTC")
-IOTBTC <- read.csv("BITF_IOTBTC_20180101_20180506.csv", header = TRUE)
+IOTBTC <- fread("BITF_IOTBTC_20180101_20180506.csv", header = TRUE)
 
 setwd("C:/btc/Tics/Bitfinex/IOTUSD")
-IOTUSD <- read.csv("BITF_IOTUSD_20180101_20180506.csv", header = TRUE)
+IOTUSD <- fread("BITF_IOTUSD_20180101_20180506.csv", header = TRUE)
 
 time_df <- data.frame(Timestamp = c(1514678401:1525651177), index = 1)
 
@@ -518,7 +518,7 @@ for(cond_open in seq(-1.5,0.0,by=0.1)){
     BTCUSD_cond <- 0
     stop_loss_dur <- 86400 * 100
 
-    for(i in seq(11, nrow(m), by = 5)){
+    for(i in 1:nrow(m)){
       if(balance_usd <= 0) break
       if(trade == 0){
         if(((m[i,16]/m[i,11])-1)*100 < cond_open){
